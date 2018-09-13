@@ -1,6 +1,6 @@
 % todo :
 % - rescale state variables
-% - comments/ variable units
+% - variable units
 % - one stage simulator
 % - check execution order of each variable
 close all; clear variables; clc;
@@ -81,7 +81,7 @@ RDRNS = 0.03;
 % factor N supply to storage organs
 DVSNT = 0.8;
 %% Weather data
-year_of_data = 1987;
+year_of_data = 1972;
 station = 6;
 yod = num2str(year_of_data);
 weather_file =['C:\Users\s168210\Documents\MATLAB\stage\GIT\NLD', num2str(station),'.', yod(2:4)];
@@ -170,7 +170,7 @@ while k < 241%season_max_length && TSUM(k) < TTSUM && k <= season_max_length
     RWA = (RAIN(k)+EXPLOR+IRRIG) - (RUNOFF+TRAN+EVAP+DRAIN);  % rainfed
     WA(k+1) = WA(k)+RWA;
     % water content in rootzone
-    WC(k+1) = WA(k)*0.001/ROOTD(k);
+    WC(k+1) = WA(k+1)*0.001/ROOTD(k);
     % total exploration
     TEXPLO(k+1) = TEXPLO(k) + EXPLOR;
     % crop transipartion and soil evaporation
@@ -244,9 +244,9 @@ while k < 241%season_max_length && TSUM(k) < TTSUM && k <= season_max_length
     end   
     % Soil N supply
     RTMIN  = 0.10 * EMERG * NLIMIT;    
-    % fertilizer application
+    % fertilizer application 
     NRF(k) = NRFTAB(DOY(k));
-    FERTN(k) = FERTAB(DOY(k));
+    FFERTN(k) = FERTAB(DOY(k));
     FERTNS(k) = FERTN(k) * NRF(k); % verified
     % total nutrient uptake
     if(DOY(k)<DOYEM)
@@ -333,14 +333,13 @@ while k < 241%season_max_length && TSUM(k) < TTSUM && k <= season_max_length
     else
         NTAC(k) = NTAG(k)/TAGBM(k);
     end
-    %% update day
+    %% increment day
     k = k+1;
-
 end
 %% save variables (same variables as res.dat)
 save('Z.mat','DVS','TSUM', 'TAGBM','WST', 'WLVG','WLVD','WSO','LAI' ,'NTAC' ,'WRT','GTSUM','CBALAN','TRANRF', 'NNI','SLA', ...
 'FRACT','FRTWET','FLVT','FSTT', 'FSOT','RWLVG','RWST','RWRT', 'RWSO','CUMPAR','LUECAL', 'NUPTT','TTRAN','TEVAP','PEVAP','NBALAN', 'WATBAL', ... 
-'NUPTR','TNSOIL','NDEMTO','RNSOIL','FERTN','FERTNS','WA','TIRRIG','TRAIN','TEXPLO','TRUNOF','TDRAIN')
+'NUPTR','TNSOIL','NDEMTO','RNSOIL','FERTN','FERTNS','WA','TIRRIG','TRAIN','TEXPLO','TRUNOF','TDRAIN', 'WC')
 %% functions to include photoperiodicity
 function [c] = PHOTTB(tau)
 PHOTTB_tab = [0,0; 8,1;10,1;12,1;18,1];
@@ -388,7 +387,7 @@ NRFTAB_tab = [0,0.7; 100,0.7; 125,0.7; 150,0.7;200,0.7; 240,0];
 c = interp1(NRFTAB_tab(:,1),NRFTAB_tab(:,2),tau);
 end
 
-%% subroutines FORTRAN
+%% globals included subroutines FORTRAN
 function [DAYL] = ASTRO(DOY,LAT)
 SINLAT = sin(pi*LAT/180);
 COSLAT = cos(pi*LAT/180);
