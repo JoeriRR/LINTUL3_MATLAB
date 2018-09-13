@@ -8,3 +8,13 @@ This chapter describes the files.
 Script to run the LINTUL3 crop model inside the MATLAB environment.
 ### LINTUL3_res.m
 Script to compare the results from MATLAB and the FST-simulator. 
+### monthday.m
+Function to obtain month and day.
+### NLD6.987
+Weatherfile 1987, Amersfoort, Netherlands.
+### importfile.m
+Function to read res.dat.
+### res.dat
+Data obtained from the FST-simulator.
+### Read_Weatherfile.m
+Function to read the weatherfile NLD6.987.
