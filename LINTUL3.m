@@ -14,7 +14,7 @@ STTIME = 1;
 season_max_length = 280;
 season_start_date(1:2) = monthday(STTIME); % season start: [M,D], e.g.: [3,4] equals March 4th
 DOY = STTIME:season_max_length-1;          % day of year
-
+% a% 
 %% global parameters 
 global SLAC TBASE NMAXSO DELT WMFAC RDRNS DVSNT DVSNLT WCSUBS DVSDR LSNR FRNX LRNR WCI NFRLVI NFRSTI NFRRTI RGRL LAICR TSUMAN TSUMMT TSUMAG RDRSHM LUE K ROOTDM RRDMAX WCAD WCWET WCST WCWP WCFC TRANCO DRATE IRRIGF TCNT RDRRT RNFLV RNFST RNFRT FNTRT NLUE NLAI NSLA NPART
 % specific leaf area constant
