@@ -3,65 +3,83 @@
 % - comments/ variable units
 % - one stage simulator
 % - check execution order of each variable
-close all; clear variables;clc;
+close all; clear variables; clc;
 %% Season parameters
 global DOYEM
+% the day of the year on which crop emerges
 DOYEM = 90;
+% start time simulation
 STTIME = 1;
+% max season length
 season_max_length = 280;
 season_start_date(1:2) = monthday(STTIME); % season start: [M,D], e.g.: [3,4] equals March 4th
-DOY = STTIME:season_max_length-1; % day of year
+DOY = STTIME:season_max_length-1;          % day of year
 
-%% global parameters not grouped yet
+%% global parameters 
 global SLAC TBASE NMAXSO DELT WMFAC RDRNS DVSNT DVSNLT WCSUBS DVSDR LSNR FRNX LRNR WCI NFRLVI NFRSTI NFRRTI RGRL LAICR TSUMAN TSUMMT TSUMAG RDRSHM LUE K ROOTDM RRDMAX WCAD WCWET WCST WCWP WCFC TRANCO DRATE IRRIGF TCNT RDRRT RNFLV RNFST RNFRT FNTRT NLUE NLAI NSLA NPART
+% specific leaf area constant
 SLAC = 0.022;
+% base temperature for spring wheat crop
 TBASE = 0;
-RGRL = 0.009;
-LAICR = 4;
-RDRSHM = 0.03;
-LUE = 2.8;
-K = 0.6;
-ROOTDM = 1.2;
-RRDMAX = 0.012;
+% relative growth rate of LAI at the xponential growth phase (oC d)^-1,
+% critical LAI above which mutual shading of leaves occur, and the maximum
+% relative death rate of leaves due to shading.
+RGRL = 0.009; LAICR = 4; RDRSHM = 0.03;
+% light use efficiency and extinction coefficient
+LUE = 2.8; K = 0.6;
+% maximum root depth and maximum rate of increase in rooting depth (m d-1)
+% for a rice crop
+ROOTDM = 1.2; RRDMAX = 0.012;
+% soil hydraulic properties
 WCAD = 0.1; WCWP = 0.2; WCFC = 0.4; WCWET = 0.45; WCST = 0.5;
+% transpiration constant (mm/day) indicating the level of drought tolerance
+% of the wheat crop
 TRANCO = 8;
-DRATE = 30;
-IRRIGF = 1;
+% maximum drainage rate of the soil (mm/day) and irrigation factor (1 = yes, 0 = no)
+DRATE = 30; IRRIGF = 1;
+% time constant (days) for N translocation
 TCNT = 10;
+% relative death rate of roots
 RDRRT = 0.03;
+% residual N concentration in leaves, stem and roots.
 RNFLV = 0.004; RNFST = 0.002; RNFRT = 0.002;
+% nitrogen translocated from roots as a fraction of the total amount of
+% nitrogen translocated from leaves and stem.
 FNTRT = 0.15;
+% extinction coefficient for nitrogen distribution down the canopy
 NLUE = 0.2;
+% coefficient for the effect of N stress on LAI reduction (during juvenile stage)
 NLAI = 1;
+% coefficient for the effect of N stress on SLA reduction
 NSLA = 1;
+% coefficient for the effect of N stress on leaf biomass reduction
 NPART = 1;
+% initial water content in (water/(cm3 soil)
 WCI = 0.4;
+% temperature sum for anthesis, and maturity and ageing of leaves
 TSUMAN = 800; TSUMMT = 1030; TSUMAG = 800;
-NFRLVI = 0.06;  NFRSTI = 0.03; NFRRTI = 0.03;
-NMAXSO = 0.0165;
-LSNR = 0.50; LRNR = 0.50;
+% initial fraction of N (g N g-1 DM) in leaves, stem and roots.
+NFRLVI = 0.06;  NFRSTI = 0.03; NFRRTI = 0.03; 
+% used for N concentration in th leaves, from which stem and roots are
+% derived as function of DVS
+NMAXSO = 0.0165;LSNR = 0.50; LRNR = 0.50;
+% optimal N concentration as the fraction of maximum N concentration
 FRNX = 0.5;
+% Nitrogen limiting factor at low moisture conditions
 DVSNLT = 1.0;
+% development stage above which death of leaves and roots starts
 DVSDR = 1.0;
+% as irrigated up to field capacity (WMFAC = 0), as irrigated up to
+% saturation (WMFAC = 1)
 WMFAC = 0.0;
+% constant of exploartion of water in soil when roots grow downwards
 WCSUBS= 0.30;
+% increase time simulation
 DELT = 1;
+% relative death of leaves due to N stress
 RDRNS = 0.03;
+% factor N supply to storage organs
 DVSNT = 0.8;
-%initial conditions
-TSUMI = 0;
-DVSI = 0;
-ROOTDI = 0.1;
-WAI = 1000*ROOTDI*WCI;
-WLVGI = 2.4; WSTI  = 0.0; WRTLI = 3.6; WSOI  = 0.0;
-SLACFI = SLACF(DVSI);
-ISLA = SLAC * SLACFI;
-LAII = WLVGI * ISLA;
-ANLVI = NFRLVI* WLVGI;
-ANSTI = NFRSTI* WSTI;
-ANRTI = NFRRTI* WRTLI;
-ANSOI = 0.;
-
 %% Weather data
 year_of_data = 1987;
 station = 6;
@@ -71,28 +89,32 @@ weather_file =['C:\Users\s168210\Documents\MATLAB\stage\GIT\NLD', num2str(statio
 days = DOY(1):DOY(end);
 DTR = DTR(days); RAIN = RAIN(days); TN = TN(days); TX = TX(days); VP = VP(days); WN = WN(days);
 % DTR is daily total irradiation in MJ/m^2
-
-%RAIN=max(0,RAIN+dRAIN(1:242)');
-%TRAIN   = [cumsum(RAIN)];     % cumulative rain
+% RAIN=max(0,RAIN+dRAIN(1:242)');
 DAVTMP  = (TN+TX)/2;           % daily average temperature
 DTEFF   = max(0,DAVTMP-TBASE); % daily effective temperature
-
-%% Initial conditions
-% Overview of states
-% ============================
-% TSUM  = temperature sum [Cd]
-% LAI   = leaf area index [-]
-% WLV   = biomass of leaves [kg]
-% WLVG  = biomass of green leaves [kg]
-% WLVD  = biomass of dead leaves [kg]
-% WSO   = biomass storage organ [kg]
-% WST   = biomass of stem [kg]
-% WRT   = biomass roots [kg]
-% ROOTD = root depth [m]
-% WA    = water in the soil root-zone [mm]
-% WC    = water content 
-
+%% initial conditions 
 [SLA,FLVT,NBALAN,TRANRF,TAGBM,RNSOIL,NTAC,NTAG,PEVAP,WATBAL,RWRT,RWST,LUECAL,RWSO,NDEMTO,RWLVG, FRTWET,FSTT,FSOT,FRACT,TSUM,NRF,TEVAP,TTRAN,TRAIN,TRUNOF,TIRRIG,TDRAIN,TEXPLO,CUMPAR,GTSUM,WDRT,CBALAN,NLOSSR,NLOSSL,FERTNS,FERTN,TNSOIL,NUPTT,LAI,WLV,WLVG,WLVD,WSO,WST,WRT,ROOTD,WA,WC,WCCR,DVS,NNI,ANLV,ANST,ANRT,ANSO,NUPTR]  =  deal(zeros(241,1));
+% initial development stage
+TSUMI = 0;
+DVSI = 0;
+% Initial root depth (m)
+ROOTDI = 0.1;
+% initial amount of water present in the rooted depth at the start of the
+% calculations, based on the initial water content (mm)
+WAI = 1000*ROOTDI*WCI;
+% initial weigth of leaves, roots stem, and storage organs and
+% transplanting (g/m2)
+WLVGI = 2.4; WSTI  = 0.0; WRTLI = 3.6; WSOI  = 0.0;
+% initial LAI
+SLACFI = SLACF(DVSI);
+ISLA = SLAC * SLACFI;
+LAII = WLVGI * ISLA;
+% Initial amount of N (g/cm2) in leaves, stem, roots and storage organs.
+ANLVI = NFRLVI* WLVGI;
+ANSTI = NFRSTI* WSTI;
+ANRTI = NFRRTI* WRTLI;
+ANSOI = 0.;
+% allocate initial conditions to state variables
 WLVG(1) = WLVGI;
 DVS(1) = DVSI;
 ROOTD(1) = ROOTDI;
@@ -108,11 +130,13 @@ ANLV(1) = ANLVI;
 ANST(1) = ANSTI;
 ANRT(1) = ANRTI;
 ANSO(1) = ANSOI;
+% assumed to be 1 initially (nested variable)
 DSLR = 1;
 %% Simulate
-k    = 1;
+k = 1;
 I = zeros(1,season_max_length);
 TTSUM = TSUMAN+TSUMMT;
+% extra variable to calculate DVS (nested in FORTRAN subroutine)
 DVS1 = 0; DVS2 = 0;
 while k < 241%season_max_length && TSUM(k) < TTSUM && k <= season_max_length
     %% --------- emergence, temperature sum ---------
@@ -188,6 +212,7 @@ while k < 241%season_max_length && TSUM(k) < TTSUM && k <= season_max_length
     end
     NNI(k) = NNINDX(DOY(k),EMERG,NFGMR,NRMR,NOPTMR);
     SLA(k) = SLAC * SLACF(DVS(k))*exp(-NSLA*(1-NNI(k)));
+    
     %% --------- soil nitrogen supply ---------
     RDRTMP = RDRT(DAVTMP(k));
     % growth rate and dry matter production of plant organs
@@ -205,12 +230,12 @@ while k < 241%season_max_length && TSUM(k) < TTSUM && k <= season_max_length
     [RDRDV,RDRSH,RDR,DLV,DLVS,DLVNS,DLAIS,DLAINS,DLAI] = DEATHL(DOY(k),TSUM(k),RDRTMP,LAI(k),WLVG(k),NNI(k),SLA(k));
     RLAI = GLAI - DLAI;        
     LAI(k+1) = LAI(k) + RLAI; 
+    
     %% --------- soil nitrogen supply continueed ---------
     [DRRT,RNLDLV,RNLDRT] = RNLD(DVS(k),WRT(k),DLV);
     [RWLVG(k),RWRT(k),RWST(k),RWSO(k)] = RELGR(DOY(k),EMERG,GTOTAL,FLV,FRT,FST,FSO,DLV,DRRT);
     [NDEML,NDEMS,NDEMR,NDEMSO] = NDEMND(NMAXLV,NMAXST,NMAXRT,WLVG(k),WST(k),WRT(k),WSO(k),ANLV(k),ANST(k),ANRT(k),ANSO(k));
-    NDEMTO(k) = max(0,NDEML+NDEMS+NDEMR); % verified
-    
+    NDEMTO(k) = max(0,NDEML+NDEMS+NDEMR); % verified    
     % Nitrogren limiting factor at low moisture conditions
     if(DVS(k)<DVSNLT && WC(k)>= WCWP)
         NLIMIT = 1;
@@ -218,8 +243,7 @@ while k < 241%season_max_length && TSUM(k) < TTSUM && k <= season_max_length
         NLIMIT = 0;
     end   
     % Soil N supply
-    RTMIN  = 0.10 * EMERG * NLIMIT;
-    
+    RTMIN  = 0.10 * EMERG * NLIMIT;    
     % fertilizer application
     NRF(k) = NRFTAB(DOY(k));
     FERTN(k) = FERTAB(DOY(k));
@@ -243,8 +267,7 @@ while k < 241%season_max_length && TSUM(k) < TTSUM && k <= season_max_length
     %% updating states
     RNLV = RNULV-RNTLV-RNLDLV;
     RNST = RNUST-RNTST; 
-    RNRT = RNURT-RNTRT-RNLDRT; 
- 
+    RNRT = RNURT-RNTRT-RNLDRT;  
     % Change in organic N in soil
     RNSOIL(k) = FERTNS(k)/DELT -NUPTR(k) + RTMIN;
     % Amount of inorganic N in soil as function of fertizlier
@@ -284,7 +307,6 @@ while k < 241%season_max_length && TSUM(k) < TTSUM && k <= season_max_length
     NLOSSL(k+1) = RNLDLV + NLOSSL(k);
     NLOSSR(k+1) = NLOSSR(k) + RNLDRT;
     NBALAN(k) = NUPTT(k)+(ANLVI+ANSTI+ANRTI+ANSOI)-(ANLV(k)+ANST(k)+ANRT(k)+ANSO(k)+NLOSSL(k)+NLOSSR(k)); 
-    
     % weight of green leaves, dead leaves, stem, storage orangs and roots
     WLVG(k+1) = WLVG(k)+RWLVG(k);
     WLVD(k+1) = WLVD(k)+DLV;
@@ -300,8 +322,7 @@ while k < 241%season_max_length && TSUM(k) < TTSUM && k <= season_max_length
     % Biomass carbon balance
     GTSUM(k+1) = GTSUM(k)+GTOTAL;
     WDRT(k+1) = WDRT(k) + DRRT;
-    CBALAN(k) = GTSUM(k)+(WRTLI+WLVGI+WSTI+WSOI)-(WLV+WST(k)+WSO(k)+WRT(k)+WDRT(k));
-    
+    CBALAN(k) = GTSUM(k)+(WRTLI+WLVGI+WSTI+WSOI)-(WLV+WST(k)+WSO(k)+WRT(k)+WDRT(k));    
     % For calculation of LUE
     PAR = 0.5*DTR(k);
     LUECAL(k) = GTOTAL/PAR;
@@ -316,6 +337,7 @@ while k < 241%season_max_length && TSUM(k) < TTSUM && k <= season_max_length
     k = k+1;
 
 end
+%% save variables (same variables as res.dat)
 save('Z.mat','DVS','TSUM', 'TAGBM','WST', 'WLVG','WLVD','WSO','LAI' ,'NTAC' ,'WRT','GTSUM','CBALAN','TRANRF', 'NNI','SLA', ...
 'FRACT','FRTWET','FLVT','FSTT', 'FSOT','RWLVG','RWST','RWRT', 'RWSO','CUMPAR','LUECAL', 'NUPTT','TTRAN','TEVAP','PEVAP','NBALAN', 'WATBAL', ... 
 'NUPTR','TNSOIL','NDEMTO','RNSOIL','FERTN','FERTNS','WA','TIRRIG','TRAIN','TEXPLO','TRUNOF','TDRAIN')
@@ -366,7 +388,7 @@ NRFTAB_tab = [0,0.7; 100,0.7; 125,0.7; 150,0.7;200,0.7; 240,0];
 c = interp1(NRFTAB_tab(:,1),NRFTAB_tab(:,2),tau);
 end
 
-%% other functions
+%% subroutines FORTRAN
 function [DAYL] = ASTRO(DOY,LAT)
 SINLAT = sin(pi*LAT/180);
 COSLAT = cos(pi*LAT/180);

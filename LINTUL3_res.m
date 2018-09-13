@@ -36,12 +36,16 @@ for k = 1:length(names)
    plot(vec,B(vec,k));
 end
 %% compare variables
-clc;
+clc; day = zeros(size(A,2),1);
 % prints the Mean squared error
 for k = 1:length(names)
    temp = norm(A(vec,k)-B(vec,k),2)/length(vec);
-   NormStr = strcat("MSE -->",names(k)," = ", num2str(temp));
-   disp(NormStr)
+   [temp2,I]= max(A(vec,k)-B(vec,k));
+   day(k) = I;
+   NormStr = pad(strcat(pad(names(k),10),"MSE = ", num2str(temp)),30);
+   MaxStr = pad(strcat("MAX error daily = ",num2str(temp2)),30);
+   PrintStr = strcat(NormStr, MaxStr, "At day ", num2str(I));
+   disp(PrintStr)
 end
 
 
