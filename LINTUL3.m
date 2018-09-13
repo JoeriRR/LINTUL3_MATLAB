@@ -72,7 +72,7 @@ station = 6;
 %     ParseWeatherFile('etmgeg_370.txt',init,init+season_max_length-1);
 
 yod = num2str(year_of_data);
-weather_file =['C:\Users\s168210\Documents\MATLAB\stage\NLD', num2str(station),'.', yod(2:4)];
+weather_file =['C:\Users\s168210\Documents\MATLAB\stage\GIT\NLD', num2str(station),'.', yod(2:4)];
 [DTR,RAIN,TN,TX,~,VP,WN] = Read_Weatherfile(weather_file);
 days = DOY(1):DOY(end);
 DTR = DTR(days); RAIN = RAIN(days); TN = TN(days); TX = TX(days); VP = VP(days); WN = WN(days);
