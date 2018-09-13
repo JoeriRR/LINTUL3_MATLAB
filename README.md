@@ -18,3 +18,5 @@ Function to read res.dat.
 Data obtained from the FST-simulator.
 ### Read_Weatherfile.m
 Function to read the weatherfile NLD6.987.
+### Z.mat 
+File which has all the same variables as res.dat but from MATLAB instead of FST.
