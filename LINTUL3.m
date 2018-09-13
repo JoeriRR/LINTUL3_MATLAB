@@ -1,10 +1,9 @@
 % todo :
-% - include globals in functions
 % - rescale state variables
-% - comments
+% - comments/ variable units
 % - one stage simulator
-
-close all; clear all;clc;
+% - check execution order of each variable
+close all; clear variables;clc;
 %% Season parameters
 global DOYEM
 DOYEM = 90;
@@ -66,11 +65,6 @@ ANSOI = 0.;
 %% Weather data
 year_of_data = 1987;
 station = 6;
-
-% init = 46 + days(datetime(year_of_data,season_start_date(1),season_start_date(2))-datetime('1-1-1951'));
-% [YYYYMMDD,FG,TG,TN,TX,Q0,UG,UX,UN,EV24] = ...
-%     ParseWeatherFile('etmgeg_370.txt',init,init+season_max_length-1);
-
 yod = num2str(year_of_data);
 weather_file =['C:\Users\s168210\Documents\MATLAB\stage\GIT\NLD', num2str(station),'.', yod(2:4)];
 [DTR,RAIN,TN,TX,~,VP,WN] = Read_Weatherfile(weather_file);
@@ -78,8 +72,8 @@ days = DOY(1):DOY(end);
 DTR = DTR(days); RAIN = RAIN(days); TN = TN(days); TX = TX(days); VP = VP(days); WN = WN(days);
 % DTR is daily total irradiation in MJ/m^2
 
-% RAIN=max(0,RAIN+dRAIN(1:242)');
-%TRAIN   = [cumsum(RAIN)];    % cumulative rain
+%RAIN=max(0,RAIN+dRAIN(1:242)');
+%TRAIN   = [cumsum(RAIN)];     % cumulative rain
 DAVTMP  = (TN+TX)/2;           % daily average temperature
 DTEFF   = max(0,DAVTMP-TBASE); % daily effective temperature
 
@@ -136,13 +130,11 @@ while k < 241%season_max_length && TSUM(k) < TTSUM && k <= season_max_length
     %% --------- Rooth Depth ---------
     RROOTD = min(RRDMAX*(WC(k) >= WCWP)*EMERG,ROOTDM-ROOTD(k));
     ROOTD(k+1) = ROOTD(k) + RROOTD;
-    
     %% --------- Soil moisture balance --------- 
-    
     [PEVAP(k),PTRAN] = PENMAN( DAVTMP(k),VP(k),DTR(k),LAI(k),WN(k));    
-    [EVAP, TRAN, WCCR(k+1),DSLR] = EVAPTR( PEVAP(k),PTRAN,ROOTD(k),WA(k),WCAD,WCWP,WCFC,WCWET,WCST,TRANCO,DELT,WMFAC,RAIN(k),DSLR);
+    [EVAP, TRAN, WCCR(k+1),DSLR] = EVAPTR( PEVAP(k),PTRAN,ROOTD(k),WA(k),RAIN(k),DSLR);
     
-    [DRAIN,RUNOFF,IRRIG] = DRUNIR(RAIN(k),EVAP,TRAN,IRRIGF,DRATE,DELT,WA(k),ROOTD(k),WCFC,WCST,WMFAC);
+    [DRAIN,RUNOFF,IRRIG] = DRUNIR(RAIN(k),EVAP,TRAN,WA(k),ROOTD(k));
     % TRANRF verified
     if(PTRAN <= eps)
         TRANRF(k) = TRAN;
@@ -151,7 +143,6 @@ while k < 241%season_max_length && TSUM(k) < TTSUM && k <= season_max_length
     end    
     % update water levels
     EXPLOR = 1000*RROOTD*WCSUBS;
-    
     RWA = (RAIN(k)+EXPLOR+IRRIG) - (RUNOFF+TRAN+EVAP+DRAIN);  % rainfed
     WA(k+1) = WA(k)+RWA;
     % water content in rootzone
@@ -169,15 +160,14 @@ while k < 241%season_max_length && TSUM(k) < TTSUM && k <= season_max_length
     % update water balance
     WATBAL(k) = WA(k)-WAI-TRAIN(k)-TEXPLO(k)-TIRRIG(k)+TRUNOF(k)+TTRAN(k)+TEVAP(k)+TDRAIN(k);
     %% --------- Calculation of Develement stage  DVS and update NNI ---------
-    [DVS(k),DVS1,DVS2] = SUBDVS(DOY(k),DOYEM,TSUM(k),TSUMAN,TSUMMT,DVS1,DVS2); % verified
-
+    [DVS(k),DVS1,DVS2] = SUBDVS(DOY(k),TSUM(k),DVS1,DVS2); % verified
     % maximum N concentration in the leaves, from which the values of the
     % stem and roots are derived, as a function of development stage.
     NMAXLV = NMXLV(DVS(k));
     NMAXST = LSNR * NMAXLV;
     NMAXRT = LRNR * NMAXLV;
     % maximum nitrogen concentration of stem and leaves
-    [NOPTLV,NOPTST] = NOPTM(FRNX,NMAXLV,NMAXST);
+    [NOPTLV,NOPTST] = NOPTM(NMAXLV,NMAXST);
     % total vegatative biomass
     TBGMR = WLVG(k)+WST(k);
     % maximum N content in the plant
@@ -196,7 +186,7 @@ while k < 241%season_max_length && TSUM(k) < TTSUM && k <= season_max_length
         NRMR = (WLVG(k)*RNFLV+WST(k)*RNFST)/(TBGMR);
         NFGMR = NUPGMR/TBGMR;
     end
-    NNI(k) = NNINDX(DOY(k),DOYEM,EMERG,NFGMR,NRMR,NOPTMR);
+    NNI(k) = NNINDX(DOY(k),EMERG,NFGMR,NRMR,NOPTMR);
     SLA(k) = SLAC * SLACF(DVS(k))*exp(-NSLA*(1-NNI(k)));
     %% --------- soil nitrogen supply ---------
     RDRTMP = RDRT(DAVTMP(k));
@@ -205,21 +195,20 @@ while k < 241%season_max_length && TSUM(k) < TTSUM && k <= season_max_length
     FLVT(k) = FLVTB(DVS(k)); % verified
     FSTT(k) = FSTTB(DVS(k)); % verified
     FSOT(k) = FSOTB(DVS(k)); % verified
-    [FRT,FLV,FST,FSO] = SUBPAR(NPART,TRANRF(k),NNI(k),FRTWET(k),FLVT(k),FSTT(k),FSOT(k));
+    [FRT,FLV,FST,FSO] = SUBPAR(TRANRF(k),NNI(k),FRTWET(k),FLVT(k),FSTT(k),FSOT(k));
     FRACT(k) = FLV+FST+FSO+FRT; % verified
     
     %% calculate leaf growth
-    [PARINT,GTOTAL] = GROWTH(DOY(k),DOYEM,DTR(k),K,NLUE,LAI(k),LUE,TRANRF(k),NNI(k));
+    [PARINT,GTOTAL] = GROWTH(DOY(k),DTR(k),LAI(k),TRANRF(k),NNI(k));
     GLV = FLV * GTOTAL;    
-    GLAI = GLA(DOY(k),DOYEM,DTEFF(k),LAII,RGRL,DELT,SLA(k),LAI(k),GLV,NLAI,WC(k),WCWP,DVS(k),TRANRF(k),NNI(k));
-    [RDRDV,RDRSH,RDR,DLV,DLVS,DLVNS,DLAIS,DLAINS,DLAI] = DEATHL(DOY(k),DOYEM,TSUM(k),TSUMAG,RDRTMP,RDRSHM,LAI(k),LAICR,WLVG(k),RDRNS,NNI(k),SLA(k));
+    GLAI = GLA(DOY(k),DTEFF(k),LAII,SLA(k),LAI(k),GLV,WC(k),DVS(k),TRANRF(k),NNI(k));
+    [RDRDV,RDRSH,RDR,DLV,DLVS,DLVNS,DLAIS,DLAINS,DLAI] = DEATHL(DOY(k),TSUM(k),RDRTMP,LAI(k),WLVG(k),NNI(k),SLA(k));
     RLAI = GLAI - DLAI;        
-    LAI(k+1) = LAI(k) + RLAI; % hier gaat t ergens fout
+    LAI(k+1) = LAI(k) + RLAI; 
     %% --------- soil nitrogen supply continueed ---------
-    
-    [DRRT,RNLDLV,RNLDRT] = RNLD(DVS(k),WRT(k),RDRRT,RNFLV,DLV,RNFRT,DVSDR);
-    [RWLVG(k),RWRT(k),RWST(k),RWSO(k)] = RELGR(DOY(k),DOYEM,EMERG,WLVGI,WRTLI,WSTI,WSOI,GTOTAL,FLV,FRT,FST,FSO,DLV,DRRT,DELT);
-    [NDEML,NDEMS,NDEMR,NDEMSO] = NDEMND(NMAXLV,NMAXST,NMAXRT,NMAXSO,WLVG(k),WST(k),WRT(k),WSO(k),ANLV(k),ANST(k),ANRT(k),ANSO(k),TCNT,DELT);
+    [DRRT,RNLDLV,RNLDRT] = RNLD(DVS(k),WRT(k),DLV);
+    [RWLVG(k),RWRT(k),RWST(k),RWSO(k)] = RELGR(DOY(k),EMERG,GTOTAL,FLV,FRT,FST,FSO,DLV,DRRT);
+    [NDEML,NDEMS,NDEMR,NDEMSO] = NDEMND(NMAXLV,NMAXST,NMAXRT,WLVG(k),WST(k),WRT(k),WSO(k),ANLV(k),ANST(k),ANRT(k),ANSO(k));
     NDEMTO(k) = max(0,NDEML+NDEMS+NDEMR); % verified
     
     % Nitrogren limiting factor at low moisture conditions
@@ -241,8 +230,8 @@ while k < 241%season_max_length && TSUM(k) < TTSUM && k <= season_max_length
     else
         NUPTR(k) = max(0., min (NDEMTO(k), TNSOIL(k)))* NLIMIT/ DELT;
     end 
-    [RNULV,RNUST,RNURT] = RNUSUB(DOY(k),DOYEM,EMERG,NDEML,NDEMS,NDEMR,NUPTR(k),NDEMTO(k),ANLVI,ANSTI,ANRTI,DELT);
-    [ATNLV,ATNST,ATNRT,ATN] = NTRLOC(ANLV(k),ANST(k),ANRT(k),WLVG(k),WST(k),WRT(k),RNFLV,RNFST,RNFRT,FNTRT);
+    [RNULV,RNUST,RNURT] = RNUSUB(DOY(k),EMERG,NDEML,NDEMS,NDEMR,NUPTR(k),NDEMTO(k));
+    [ATNLV,ATNST,ATNRT,ATN] = NTRLOC(ANLV(k),ANST(k),ANRT(k),WLVG(k),WST(k),WRT(k));
     if(DVS(k)<DVSNT)
         NSUPSO = 0;
     else
@@ -250,8 +239,7 @@ while k < 241%season_max_length && TSUM(k) < TTSUM && k <= season_max_length
     end    
     RNSO = min(NDEMSO,NSUPSO);
     [RNTLV,RNTST,RNTRT] = NTRANS(RNSO,ATNLV,ATNST,ATNRT,ATN);
-    
-    
+        
     %% updating states
     RNLV = RNULV-RNTLV-RNLDLV;
     RNST = RNUST-RNTST; 
@@ -328,41 +316,9 @@ while k < 241%season_max_length && TSUM(k) < TTSUM && k <= season_max_length
     k = k+1;
 
 end
-% resize state variables
-%{
-DOY     = DOY(1:k);
-TSUM    = TSUM(1:k);
-LAI     = LAI(1:k);
-WLV     = WLV(1:k);
-WLVG    = WLVG(1:k);
-WLVD    = WLVD(1:k);
-WSO     = WSO(1:k);
-WST     = WST(1:k);
-WRT     = WRT(1:k);
-ROOTD   = ROOTD(1:k);
-WA      = WA(1:k);
-WC      = WC(1:k);
-WCCR    = WCCR(1:k);
-WSOTHA  = WSO/100;
-ANLV    = ANLV(1:k);
-%}
-
 save('Z.mat','DVS','TSUM', 'TAGBM','WST', 'WLVG','WLVD','WSO','LAI' ,'NTAC' ,'WRT','GTSUM','CBALAN','TRANRF', 'NNI','SLA', ...
 'FRACT','FRTWET','FLVT','FSTT', 'FSOT','RWLVG','RWST','RWRT', 'RWSO','CUMPAR','LUECAL', 'NUPTT','TTRAN','TEVAP','PEVAP','NBALAN', 'WATBAL', ... 
 'NUPTR','TNSOIL','NDEMTO','RNSOIL','FERTN','FERTNS','WA','TIRRIG','TRAIN','TEXPLO','TRUNOF','TDRAIN')
-
-
-%% Comparison to FST
-% [TIME_f,LAI_f,WSOTHA_f] =importFSTresult('res.dat');
-% hold on
-% plot(TIME_f,WSOTHA_f,'--','LineWidth',2);
-% plot(TIME_f,LAI_f,'--','LineWidth',2);
-% legend('MATLAB: Storage organ biomass [ton/ha]','MATLAB: LAI [-]','FST: Storage organ biomass [ton/ha]','FST: LAI [-]','Location','NW')
-%
-% WSOTHA_norm = norm(WSOTHA_f'-WSOTHA)
-% LAI_norm    = norm(LAI_f'-LAI)
-%
-
 %% functions to include photoperiodicity
 function [c] = PHOTTB(tau)
 PHOTTB_tab = [0,0; 8,1;10,1;12,1;18,1];
@@ -409,22 +365,8 @@ function [c] = NRFTAB(tau)
 NRFTAB_tab = [0,0.7; 100,0.7; 125,0.7; 150,0.7;200,0.7; 240,0];
 c = interp1(NRFTAB_tab(:,1),NRFTAB_tab(:,2),tau);
 end
-%% leaf death
-function [RDR] = DLA(tau,dtau,LAI)
-global LAI_cr DRSH0 DRDV0 TSUMAN
 
-% death due to ageing
-if tau >= TSUMAN
-    DRDV = interp1(DRDV0(:,1),DRDV0(:,2),dtau);
-else
-    DRDV = 0;
-end
-
-% death due to shading
-DRSH = max(0, min(DRSH0, DRSH0*(LAI-LAI_cr)/LAI_cr));
-
-RDR = max(DRSH,DRDV);
-end
+%% other functions
 function [DAYL] = ASTRO(DOY,LAT)
 SINLAT = sin(pi*LAT/180);
 COSLAT = cos(pi*LAT/180);
@@ -436,7 +378,8 @@ B = COSLAT*COSDEC;
 DAYL = 12*(1+(2/pi)*asin(A/B));
 return;
 end
-function [DVS,DVS1,DVS2] = SUBDVS(TIME,DOYEM,TSUM,TSUMAN,TSUMMT,DVS1,DVS2)
+function [DVS,DVS1,DVS2] = SUBDVS(TIME,TSUM,DVS1,DVS2)
+global TSUMAN TSUMMT DOYEM
 if(TIME < DOYEM)
     DVS1 = TSUM/TSUMAN;
 elseif(TIME >= DOYEM && TSUM <= TSUMAN)
@@ -447,29 +390,28 @@ end
 DVS = DVS1+DVS2;
 return
 end
-
-%% LAI growth
-function [glai] = GLA(time,doyem,dteff,laii,rgrl,delt,sla,lai,glv,nlai,wc,wcwp,dvs,tranrf,nni)
+function [glai] = GLA(time,dteff,laii,sla,lai,glv,wc,dvs,tranrf,nni)
 % ---------------------------------------------------------------------*
 %  SUBROUTINE GLA                                                      *
 %  Purpose: This subroutine computes daily increase of leaf area index *
 %           (ha leaf/ ha ground/ d)                                    *
 % ---------------------------------------------------------------------*
 %---- Growth during maturation stage:
+global RGRL DELT DOYEM NLAI 
 glai = sla .* glv;
 
 %---- Growth during juvenile stage:
 if((dvs<0.2)&&(lai<0.75))
-    glai = (lai .*(exp(rgrl .* dteff .* delt) - 1.) ./ delt) .* tranrf*exp(-nlai*(1-nni));
+    glai = (lai .*(exp(RGRL .* dteff .* DELT) - 1.) ./ DELT) .* tranrf*exp(-NLAI*(1-nni));
 end
 
 %---- Growth at day of seedling emergence:
-if((time>=doyem)&&(lai==0.)&&(wc>wcwp))
-    glai = laii ./ delt;
+if((time>= DOYEM)&&(lai==0.)&&(wc>WCWP))
+    glai = laii ./ DELT;
 end
 
 %---- Growth before seedling emergence:
-if(time < doyem)
+if(time < DOYEM)
     glai = 0.;
 end
 
@@ -504,11 +446,12 @@ ptran  = max( 0., ptran );
 
 return;
 end
-function [EVAP,TRAN,WCCR,DSLR]=EVAPTR(PEVAP,PTRAN,rootd,WA,WCAD,WCWP,WCFC,WCWET,WCST,TRANCO,DELT,WMFAC,RAIN,DSLR)
+function [EVAP,TRAN,WCCR,DSLR]=EVAPTR(PEVAP,PTRAN,rootd,WA,RAIN,DSLR)
 % ---------------------------------------------------------------------*
 %  SUBROUTINE EVAPTR                                                   *
 %  Purpose: To compute actual rates of evaporation and transpiration   *
 % ---------------------------------------------------------------------*
+global WCAD WCWP WCFC WCWET WCST TRANCO DELT WMFAC
 WC   = 0.001 .* WA   ./ rootd;
 WAAD = 1000. .* WCAD .* rootd;
 WAFC = 1000. .* WCFC .* rootd;
@@ -564,9 +507,8 @@ TRAN = TRAN*AVAILF;
 
 return;
 end
-
-%% Drainage, runoff and irrigation
-function [DRAIN,RUNOFF,IRRIG]=DRUNIR(RAIN,EVAP,TRAN,IRRIGF,DRATE,DELT,WA,ROOTD,WCFC,WCST,WMFAC)
+function [DRAIN,RUNOFF,IRRIG]=DRUNIR(RAIN,EVAP,TRAN,WA,ROOTD)
+global IRRIGF DRATE DELT WCFC WCST WMFAC
 WC   = 0.001 .* WA   ./ ROOTD;
 WAFC = 1000. .* WCFC .* ROOTD;
 WAST = 1000. .* WCST .* ROOTD;
@@ -585,7 +527,8 @@ else
 end
 return;
 end
-function [FRT,FLV,FST,FSO] = SUBPAR(NPART,TRANRF,NNI,FRTWET,FLVT,FSTT,FSOT)
+function [FRT,FLV,FST,FSO] = SUBPAR(TRANRF,NNI,FRTWET,FLVT,FSTT,FSOT)
+global NPART
 if(TRANRF < NNI)
     FRTMOD = max( 1, 1/(TRANRF+0.5));
     FRT    = FRTWET * FRTMOD;
@@ -603,7 +546,8 @@ else
 end
 return;
 end
-function [PARINT,GTOTAL] = GROWTH(TIME,DOYEM,DTR,K,NLUE,LAI,LUE,TRANRF,NNI)
+function [PARINT,GTOTAL] = GROWTH(TIME,DTR,LAI,TRANRF,NNI)
+global K NLUE DOYEM LUE
 if((TIME-DOYEM)>=0)
     PARINT = 0.5 * DTR * (1.- exp(-K*LAI));
 else
@@ -616,7 +560,8 @@ else
 end
 return;
 end
-function [RWLVG,RWRT,RWST,RWSO] = RELGR(TIME,DOYEM,EMERG,WLVGI,WRTLI,WSTI,WSOI,GTOTAL,FLV,FRT,FST,FSO,DLV,DRRT,DELT)
+function [RWLVG,RWRT,RWST,RWSO] = RELGR(TIME,EMERG,GTOTAL,FLV,FRT,FST,FSO,DLV,DRRT)
+global DOYEM
 if(TIME>=DOYEM && EMERG == 1)
     RWLVG = GTOTAL * FLV - DLV;
     RWRT  = GTOTAL * FRT - DRRT;
@@ -630,7 +575,8 @@ else
 end
 return;
 end
-function [RNULV,RNUST,RNURT] = RNUSUB(TIME,DOYEM,EMERG,NDEML,NDEMS,NDEMR,NUPTR,NDEMTO,ANLVI,ANSTI,ANRTI,DELT)
+function [RNULV,RNUST,RNURT] = RNUSUB(TIME,EMERG,NDEML,NDEMS,NDEMR,NUPTR,NDEMTO)
+global DOYEM
 if(TIME>=DOYEM && EMERG == 1)
     if(NDEMTO == 0)
         RNULV = NDEML* NUPTR;
@@ -649,19 +595,22 @@ end
 
 return;
 end
-function [NOPTLV,NOPTST] = NOPTM(FRNX,NMAXLV,NMAXST)
+function [NOPTLV,NOPTST] = NOPTM(NMAXLV,NMAXST)
+global FRNX
 NOPTLV= FRNX * NMAXLV;
 NOPTST= FRNX * NMAXST;
 return;
 end
-function [NDEML,NDEMS,NDEMR,NDEMSO] = NDEMND(NMAXLV,NMAXST,NMAXRT,NMAXSO,WLVG,WST,WRT,WSO,ANLV,ANST,ANRT,ANSO,TCNT,DELT)
+function [NDEML,NDEMS,NDEMR,NDEMSO] = NDEMND(NMAXLV,NMAXST,NMAXRT,WLVG,WST,WRT,WSO,ANLV,ANST,ANRT,ANSO)
+global NMAXSO TCNT
 NDEML  =  max(NMAXLV*WLVG -  ANLV, 0.);
 NDEMS  =  max(NMAXST*WST  - ANST, 0.);
 NDEMR  =  max(NMAXRT*WRT  - ANRT, 0.);
 NDEMSO =  max(NMAXSO*WSO  - ANSO, 0.)/TCNT;
 return;
 end
-function [ATNLV,ATNST,ATNRT,ATN] = NTRLOC(ANLV,ANST,ANRT,WLVG,WST,WRT,RNFLV,RNFST,RNFRT,FNTRT)
+function [ATNLV,ATNST,ATNRT,ATN] = NTRLOC(ANLV,ANST,ANRT,WLVG,WST,WRT)
+global RNFLV RNFST RNFRT FNTRT
 ATNLV = max (0. , ANLV-WLVG*RNFLV);
 ATNST = max (0. , ANST-WST*RNFST);
 ATNRT = min((ATNLV + ATNST) * FNTRT, ANRT-WRT*RNFRT);
@@ -680,7 +629,8 @@ else
 end
 return;
 end
-function [DRRT,RNLDLV,RNLDRT] = RNLD(DVS,WRT,RDRRT,RNFLV,DLV,RNFRT,DVSDR)
+function [DRRT,RNLDLV,RNLDRT] = RNLD(DVS,WRT,DLV)
+global RDRRT RNFLV DVSDR RNFRT
 if(DVS < DVSDR)
     DRRT =0;
 else
@@ -690,7 +640,8 @@ RNLDLV = RNFLV*DLV;
 RNLDRT = RNFRT*DRRT;
 return;
 end
-function [NNI] = NNINDX(TIME,DOYEM,EMERG,NFGMR,NRMR,NOPTMR)
+function [NNI] = NNINDX(TIME,EMERG,NFGMR,NRMR,NOPTMR)
+global DOYEM
 TINY = 0.001;
 if(TIME >= DOYEM && EMERG == 1)
     if( (NFGMR-NRMR)/(NOPTMR-NRMR)>=TINY&& (NFGMR-NRMR)/(NOPTMR-NRMR)<=1.0 )
@@ -706,7 +657,8 @@ end
 
 return;
 end
-function [RDRDV,RDRSH,RDR,DLV,DLVS,DLVNS,DLAIS,DLAINS,DLAI] = DEATHL(TIME,DOYEM,TSUM,TSUMAG,RDRTMP,RDRSHM,LAI,LAICR,WLVG,RDRNS,NNI,SLA)
+function [RDRDV,RDRSH,RDR,DLV,DLVS,DLVNS,DLAIS,DLAINS,DLAI] = DEATHL(TIME,TSUM,RDRTMP,LAI,WLVG,NNI,SLA)
+global DOYEM TSUMAG RDRSHM LAICR RDRNS
 if(TSUM < TSUMAG)
     RDRDV =0;
 else
