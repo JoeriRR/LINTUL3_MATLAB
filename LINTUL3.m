@@ -1,8 +1,8 @@
 % todo :
 % - rescale state variables
 % - variable units
-% - one stage simulator
 % - check execution order of each variable
+% - waterbalance, cbalance, nbalance
 close all; clear variables; clc;
 %% Season parameters
 global DOYEM
@@ -81,10 +81,10 @@ RDRNS = 0.03;
 % factor N supply to storage organs
 DVSNT = 0.8;
 %% Weather data
-year_of_data = 1972;
+year_of_data = 1987;
 station = 6;
 yod = num2str(year_of_data);
-weather_file =['C:\Users\s168210\Documents\MATLAB\stage\GIT\NLD', num2str(station),'.', yod(2:4)];
+weather_file =['ICWEATHR\NLD', num2str(station),'.', yod(2:4)];
 [DTR,RAIN,TN,TX,~,VP,WN] = Read_Weatherfile(weather_file);
 days = DOY(1):DOY(end);
 DTR = DTR(days); RAIN = RAIN(days); TN = TN(days); TX = TX(days); VP = VP(days); WN = WN(days);
@@ -115,32 +115,20 @@ ANSTI = NFRSTI* WSTI;
 ANRTI = NFRRTI* WRTLI;
 ANSOI = 0.;
 % allocate initial conditions to state variables
-WLVG(1) = WLVGI;
-DVS(1) = DVSI;
-ROOTD(1) = ROOTDI;
-WA(1) = WAI;
-WC(1) = WCI;
-WCCR(1) = WCWP+0.01;
-LAI(1) = LAII;
-WLVG(1) = WLVGI;
-WRT(1) = WRTLI;
-WST(1) = WSTI;
-WSO(1) = WSOI;
-ANLV(1) = ANLVI;
-ANST(1) = ANSTI;
-ANRT(1) = ANRTI;
-ANSO(1) = ANSOI;
-% assumed to be 1 initially (nested variable)
+WLVG(1) = WLVGI; DVS(1) = DVSI; ROOTD(1) = ROOTDI; WA(1) = WAI; WC(1) = WCI; WCCR(1) = WCWP+0.01;
+LAI(1) = LAII; WLVG(1) = WLVGI; WRT(1) = WRTLI; WST(1) = WSTI; WSO(1) = WSOI; ANLV(1) = ANLVI;
+ANST(1) = ANSTI; ANRT(1) = ANRTI; ANSO(1) = ANSOI;
+% assumed to be 1 initially (nested variable, does not matter in this
+% example since it will be one when k = 1 due to weatherfile)
 DSLR = 1;
 %% Simulate
-k = 1;
-I = zeros(1,season_max_length);
+k = 1; I = zeros(1,season_max_length);
 TTSUM = TSUMAN+TSUMMT;
 % extra variable to calculate DVS (nested in FORTRAN subroutine)
 DVS1 = 0; DVS2 = 0;
-while k < 241%season_max_length && TSUM(k) < TTSUM && k <= season_max_length
+while k < 241 %season_max_length && DVS(k)<= 2.01
     %% --------- emergence, temperature sum ---------
-    EMERG = ((DOY(k)>=(DOYEM)&& WC(k)>WCWP) && -LAI(k)<0 );
+    EMERG = (((DOY(k)+1-DOYEM>0) && ((WC(k)-WCWP)>0)) && -LAI(k)<0 );
     % photosyntatic effect, latitude amersvoort 571.460
     DAYL = ASTRO(DOY(k),571.460);
     if((TSUM(k)-TSUMAN)<0)
@@ -156,7 +144,7 @@ while k < 241%season_max_length && TSUM(k) < TTSUM && k <= season_max_length
     ROOTD(k+1) = ROOTD(k) + RROOTD;
     %% --------- Soil moisture balance --------- 
     [PEVAP(k),PTRAN] = PENMAN( DAVTMP(k),VP(k),DTR(k),LAI(k),WN(k));    
-    [EVAP, TRAN, WCCR(k+1),DSLR] = EVAPTR( PEVAP(k),PTRAN,ROOTD(k),WA(k),RAIN(k),DSLR);
+    [EVAP, TRAN, WCCR(k+1),DSLR] = EVAPTR(PEVAP(k),PTRAN,ROOTD(k),WA(k),RAIN(k),DSLR);
     
     [DRAIN,RUNOFF,IRRIG] = DRUNIR(RAIN(k),EVAP,TRAN,WA(k),ROOTD(k));
     % TRANRF verified
@@ -184,7 +172,7 @@ while k < 241%season_max_length && TSUM(k) < TTSUM && k <= season_max_length
     % update water balance
     WATBAL(k) = WA(k)-WAI-TRAIN(k)-TEXPLO(k)-TIRRIG(k)+TRUNOF(k)+TTRAN(k)+TEVAP(k)+TDRAIN(k);
     %% --------- Calculation of Develement stage  DVS and update NNI ---------
-    [DVS(k),DVS1,DVS2] = SUBDVS(DOY(k),TSUM(k),DVS1,DVS2); % verified
+    [DVS(k),DVS1,DVS2] = SUBDVS(DOY(k),TSUM(k),DVS1,DVS2); 
     % maximum N concentration in the leaves, from which the values of the
     % stem and roots are derived, as a function of development stage.
     NMAXLV = NMXLV(DVS(k));
@@ -216,12 +204,12 @@ while k < 241%season_max_length && TSUM(k) < TTSUM && k <= season_max_length
     %% --------- soil nitrogen supply ---------
     RDRTMP = RDRT(DAVTMP(k));
     % growth rate and dry matter production of plant organs
-    FRTWET(k) = FRTTB(DVS(k)); % verified
-    FLVT(k) = FLVTB(DVS(k)); % verified
-    FSTT(k) = FSTTB(DVS(k)); % verified
-    FSOT(k) = FSOTB(DVS(k)); % verified
+    FRTWET(k) = FRTTB(DVS(k)); 
+    FLVT(k) = FLVTB(DVS(k)); 
+    FSTT(k) = FSTTB(DVS(k)); 
+    FSOT(k) = FSOTB(DVS(k)); 
     [FRT,FLV,FST,FSO] = SUBPAR(TRANRF(k),NNI(k),FRTWET(k),FLVT(k),FSTT(k),FSOT(k));
-    FRACT(k) = FLV+FST+FSO+FRT; % verified
+    FRACT(k) = FLV+FST+FSO+FRT; 
     
     %% calculate leaf growth
     [PARINT,GTOTAL] = GROWTH(DOY(k),DTR(k),LAI(k),TRANRF(k),NNI(k));
@@ -235,7 +223,7 @@ while k < 241%season_max_length && TSUM(k) < TTSUM && k <= season_max_length
     [DRRT,RNLDLV,RNLDRT] = RNLD(DVS(k),WRT(k),DLV);
     [RWLVG(k),RWRT(k),RWST(k),RWSO(k)] = RELGR(DOY(k),EMERG,GTOTAL,FLV,FRT,FST,FSO,DLV,DRRT);
     [NDEML,NDEMS,NDEMR,NDEMSO] = NDEMND(NMAXLV,NMAXST,NMAXRT,WLVG(k),WST(k),WRT(k),WSO(k),ANLV(k),ANST(k),ANRT(k),ANSO(k));
-    NDEMTO(k) = max(0,NDEML+NDEMS+NDEMR); % verified    
+    NDEMTO(k) = max(0,NDEML+NDEMS+NDEMR);   
     % Nitrogren limiting factor at low moisture conditions
     if(DVS(k)<DVSNLT && WC(k)>= WCWP)
         NLIMIT = 1;
@@ -246,8 +234,8 @@ while k < 241%season_max_length && TSUM(k) < TTSUM && k <= season_max_length
     RTMIN  = 0.10 * EMERG * NLIMIT;    
     % fertilizer application 
     NRF(k) = NRFTAB(DOY(k));
-    FFERTN(k) = FERTAB(DOY(k));
-    FERTNS(k) = FERTN(k) * NRF(k); % verified
+    FERTN(k) = FERTAB(DOY(k));
+    FERTNS(k) = FERTN(k) * NRF(k);
     % total nutrient uptake
     if(DOY(k)<DOYEM)
         NUPTR(k) = 0;
@@ -278,7 +266,7 @@ while k < 241%season_max_length && TSUM(k) < TTSUM && k <= season_max_length
     unused
     % N concentration of the leaves, stem, roots and storage organs
     if(WLVG(k) == 0)
-        NFLV = ANLV;
+        NFLV = []ANLV;
     else
         NFLV = ANLV/WLVG(k);
     end
@@ -310,7 +298,7 @@ while k < 241%season_max_length && TSUM(k) < TTSUM && k <= season_max_length
     % weight of green leaves, dead leaves, stem, storage orangs and roots
     WLVG(k+1) = WLVG(k)+RWLVG(k);
     WLVD(k+1) = WLVD(k)+DLV;
-    WST(k+1) = WST(k)+RWST(k); % verified
+    WST(k+1) = WST(k)+RWST(k); 
     WSO(k+1) = WSO(k)+RWSO(k); 
     WRT(k+1) = WRT(k)+RWRT(k);
     % total leaf weigth
@@ -337,7 +325,7 @@ while k < 241%season_max_length && TSUM(k) < TTSUM && k <= season_max_length
     k = k+1;
 end
 %% save variables (same variables as res.dat)
-save('Z.mat','DVS','TSUM', 'TAGBM','WST', 'WLVG','WLVD','WSO','LAI' ,'NTAC' ,'WRT','GTSUM','CBALAN','TRANRF', 'NNI','SLA', ...
+save('results\Z.mat','DVS','TSUM', 'TAGBM','WST', 'WLVG','WLVD','WSO','LAI' ,'NTAC' ,'WRT','GTSUM','CBALAN','TRANRF', 'NNI','SLA', ...
 'FRACT','FRTWET','FLVT','FSTT', 'FSOT','RWLVG','RWST','RWRT', 'RWSO','CUMPAR','LUECAL', 'NUPTT','TTRAN','TEVAP','PEVAP','NBALAN', 'WATBAL', ... 
 'NUPTR','TNSOIL','NDEMTO','RNSOIL','FERTN','FERTNS','WA','TIRRIG','TRAIN','TEXPLO','TRUNOF','TDRAIN', 'WC')
 %% functions to include photoperiodicity
@@ -365,7 +353,7 @@ FRTTB_tab = [0,0.6;0.33,0.58;0.4,0.55;0.8,0.1;1,0;2,0;2.4,0];
 c = interp1(FRTTB_tab(:,1),FRTTB_tab(:,2),tau);
 end
 function [c] = FLVTB(tau)
-FLVTB_tab = [ 0, 0.4; 0.33,0.42; 0.4,0.405; 0.8,0.36; 1,0.1; 1.01,0; 2, 0; 2.4,1];
+FLVTB_tab = [ 0, 0.4; 0.33,0.42; 0.4,0.405; 0.8,0.36; 1,0.1; 1.01,0; 2, 0; 2.4,0];
 c = interp1(FLVTB_tab(:,1),FLVTB_tab(:,2),tau);
 end
 function [c] = FSTTB(tau)
@@ -510,19 +498,22 @@ else
             FR = 1;
         end
     else
-        if((WC-WCST)/(WCCR-WCWP)<=1 && (WC-WCST)/(WCCR-WCWP)>= 0)
-            FR = (WC-WCST)/(WCCR-WCWP);
-        elseif((WC-WCST)/(WCCR-WCWP)<0)
+        if((WC-WCWP)/(WCCR-WCWP)<=1 && (WC-WCWP)/(WCCR-WCWP)>= 0)
+            FR = (WC-WCWP)/(WCCR-WCWP);
+        elseif((WC-WCWP)/(WCCR-WCWP)<0)
             FR = 0;
         else
             FR = 1;
-        end
-        
+        end        
     end
     
 end
 TRAN = PTRAN*FR;
-AVAILF = min(1,((WA-WAAD)/DELT)/(EVS+TRAN));
+if((EVS+TRAN)==0)
+    AVAILF = min(1,((WA-WAAD)/DELT));
+else
+    AVAILF = min(1,((WA-WAAD)/DELT/(EVS+TRAN)));
+end
 EVAP = EVS*AVAILF;
 TRAN = TRAN*AVAILF;
 

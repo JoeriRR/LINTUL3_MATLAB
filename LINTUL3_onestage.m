@@ -169,7 +169,7 @@ function [TSUM_n,ROOTD_n,WA_n,WC_n,WCCR_n,TEXPLO_n,TEVAP_n,TTRAN_n,TRUNOF_n,TIRR
     % CBALAN = GTSUM+(WRTLI+WLVGI+WSTI+WSOI)-(WLV+WST+WSO+WRT+WDRT);    % include initials in globals 
     % For calculation of LUE
     PAR = 0.5*DTR;
-    LUECAL_n = GTOTAL/PAR;
+    LUECAL_n = GTOTAL/PAR; % fails when adding random things, cannot devide by 0....!
     CUMPAR_n = CUMPAR + PAR;
     NTAG = ANLV+ANST+ANSO;
     if(NTAG == 0)
@@ -198,13 +198,14 @@ c = interp1(NMXLV_tab(:,1),NMXLV_tab(:,2),tau);
 end
 %% Biomass partitioning
 % for leaves (LV), stems (ST), storage organs (SO) and roots (RT) added 2.4
-% to make sure no NANS can occur
+% to make sure no NANS can occur 
+% values at x = 2.4 are assumed to be constant
 function [c] = FRTTB(tau)
 FRTTB_tab = [0,0.6;0.33,0.58;0.4,0.55;0.8,0.1;1,0;2,0;2.4,0];
 c = interp1(FRTTB_tab(:,1),FRTTB_tab(:,2),tau);
 end
 function [c] = FLVTB(tau)
-FLVTB_tab = [ 0, 0.4; 0.33,0.42; 0.4,0.405; 0.8,0.36; 1,0.1; 1.01,0; 2, 0; 2.4,1];
+FLVTB_tab = [ 0, 0.4; 0.33,0.42; 0.4,0.405; 0.8,0.36; 1,0.1; 1.01,0; 2, 0; 2.4,0];
 c = interp1(FLVTB_tab(:,1),FLVTB_tab(:,2),tau);
 end
 function [c] = FSTTB(tau)
