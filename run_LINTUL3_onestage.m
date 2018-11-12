@@ -7,7 +7,7 @@ SetGlobal;
 year_of_data = 1987;
 station = 6;
 yod = num2str(year_of_data);
-weather_file =['C:\Users\s168210\Desktop\Stage\Stage_Joeri\LINTUL\ICWEATHR\NLD', num2str(station),'.', yod(2:4)];
+weather_file =['ICWEATHR\NLD', num2str(station),'.', yod(2:4)];
 %% season params
 global DOYEM
 % the day of the year on which crop emerges
