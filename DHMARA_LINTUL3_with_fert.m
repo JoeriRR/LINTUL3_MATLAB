@@ -2,27 +2,27 @@
 addpath('Init_scripts')
 clear variables; close all; clc;
 %% General structure of DHMARA
-m = 10; % number of clients
+m = 20; % number of clients
 p = 1; % number of products
 q = 2; % number of subtime quantizations
-Cmax = [10 10 0; 0 0 5]; % agent max capacity matrix four agents that can deliver water and 1 agents that can deliver fertilizer
+Cmax = [5 5 0;0 0 10]; % agent max capacity matrix four agents that can deliver water and 1 agents that can deliver fertilizer
 [r,n] = size(Cmax); % number of resources (r) and number of agents (n)
 
 % Weighting vectors
 pi    = 100;%rand(p,1); % price per product vector
-rho   = [10; 100];%rand(r,1); % cost per resource vector (change second term)
+rho   = [10; 50];%rand(r,1); % cost per resource vector (change second term)
 sigma = ones(n,1); % cost per operation vector
 
-U = [[linspace(0,10,3) zeros(1,3)]; [zeros(1,3) linspace(1,5,3)]]; % r*s
-s = size(U,2); % number of bids per client 
+U = [[linspace(0,10,4) zeros(1,3) 5]; [zeros(1,4) linspace(2,8,3)] 5]; % r*s
+s = size(U,2); % number of bids per client
 Ucheck = reshape(U,[],1)*ones(1,m); %(r*s)*m
 decision_variables = m*(s+q*(n+r));
 
 %% Optimization constraints
 delt = binvar(s,m,'full');
 Atau = binvar(n,m,q,'full');
-Dtau = sdpvar(r,m,q,'full');
 C_bid_selection = [delt'*ones(s,1) == 1];
+Dtau = sdpvar(r,m,q,'full');
 C_1fieldpagent = [];
 C_1agentpfield = [];
 C_no_free_deli = [];
@@ -55,10 +55,10 @@ ops = sdpsettings('solver','scip','verbose',0,'cachesolvers',1);
 SetGlobal;
 TTSUM = TSUMAN+TSUMMT; % simulation stop condition
 %% get weather and season data
-year_of_data = 1987; 
+year_of_data = 1976;
 station = 6;
 yod = num2str(year_of_data);
-weather_file =['C:\Users\s168210\Desktop\Stage\Stage_Joeri\LINTUL\ICWEATHR\NLD', num2str(station),'.', yod(2:4)];
+weather_file =['ICWEATHR\NLD', num2str(station),'.', yod(2:4)];
 %% season params
 global DOYEM
 % the day of the year on which crop emerges
@@ -69,7 +69,7 @@ STTIME = 88;
 season_max_length = 300;
 season_start_date(1:2) = monthday(STTIME); % season start: [M,D], e.g.: [3,4] equals March 4th
 DOY = STTIME:season_max_length-1;          % day of year
-
+n_w = 7;
 %% weather data
 [DTR,RAIN,TN,TX,~,VP,WN] = Read_Weatherfile(weather_file);
 days = DOY(1):DOY(end);
@@ -86,6 +86,7 @@ DTEFF   = max(0,DAVTMP-TBASE); % daily effective temperature
 SetInit;
 %% get expected weather data
 load('Expected_weather.mat');
+load('Weather_mod.mat') % if you change STTIME from 88 to something else rerun this weather_data_distributions with same STTIME!!
 expected_weather = 0; % put this to zero to use old without expected weather.
 DTEFF_E = zeros(length(DTEFF),1);
 RAIN_E = zeros(length(RAIN),1);
@@ -98,13 +99,29 @@ tic;
 timer = toc;
 dRAIN = zeros(1,season_max_length);
 totU = zeros(2,season_max_length);
+A_temp = cell(season_max_length,1);
 for t = 1:season_max_length-1
     % initialize bidding matrices
     G = zeros(s,m);
     L = zeros(r*s,m);
-    %% prediction per client
+    %% prediction per client with or without expected weather
+    if(expected_weather == 1)
+        VP_E(t:t+n_w) = VP(t:t+n_w); VP_E(t+n_w+1:length(VP_E)) = mean_VP(t+n_w+1:length(VP_E));
+        DTR_E(t:t+n_w) = DTR(t:t+n_w); DTR_E(t+n_w+1:length(DTR_E)) = mean_DTR(t+n_w+1:length(DTR_E));
+        WN_E(t:t+n_w) = WN(t:t+n_w); WN_E(t+n_w+1:length(WN_E)) = mean_WN(t+n_w+1:length(WN_E));
+        DAVTMP_E(t:t+n_w) = DAVTMP(t:t+n_w); DAVTMP_E(t+n_w+1:length(DAVTMP_E)) = mean_DAVTMP(t+n_w+1:length(DAVTMP_E));
+        DTEFF_E = max(0,DAVTMP-TBASE);
+        RAIN_E(t:t+n_w) = RAIN(t:t+n_w); RAIN_E(t+n_w+1:length(RAIN_E)) = mean_RAIN(t+n_w+1:length(RAIN_E));
+    else
+        DTEFF_E = DTEFF;
+        VP_E = VP;
+        DTR_E = DTR;
+        WN_E = WN;
+        DAVTMP_E = DAVTMP;
+        RAIN_E = RAIN;
+    end
     for  j = 1:m
-        %% prediction per agent per scenario      
+        %% prediction per agent per scenario
         if TSUM_r(j,t) < TTSUM && DVS_r(j,t) < 2.01
             for k = 1:s
                 [SLA,FLVT,NBALAN,TRANRF,TAGBM,RNSOIL,NTAC,NTAG,PEVAP,WATBAL,RWRT,RWST,LUECAL,RWSO,NDEMTO,RWLVG, ...
@@ -143,31 +160,16 @@ for t = 1:season_max_length-1
                 DVS1 = DVS1_r; DVS2 = DVS2_r; DSLR = DSLR_r;
                 % next day after t
                 i = 1;
-                l = t;  
-                if(expected_weather == 1)
-                    DTEFF_E(l:l+7) = DTEFF(l:l+7); DTEFF_E(l+7+1:length(DTEFF_E)) = mean_DTEFF(l+7+1:length(DTEFF_E)); 
-                    VP_E(l:l+7) = VP(l:l+7); VP_E(l+7+1:length(VP_E)) = mean_VP(l+7+1:length(VP_E)); 
-                    DTR_E(l:l+7) = DTR(l:l+7); DTR_E(l+7+1:length(DTR_E)) = mean_DTR(l+7+1:length(DTR_E)); 
-                    WN_E(l:l+7) = WN(l:l+7); WN_E(l+7+1:length(WN_E)) = mean_WN(l+7+1:length(WN_E)); 
-                    DAVTMP_E(l:l+7) = DAVTMP(l:l+7); DAVTMP_E(l+7+1:length(DAVTMP_E)) = mean_DAVTMP(l+7+1:length(DAVTMP_E));
-                    RAIN_E(l:l+7) = RAIN(l:l+7); RAIN_E(l+7+1:length(RAIN_E)) = mean_RAIN(l+7+1:length(RAIN_E)); 
-                else
-                    DTEFF_E = DTEFF;
-                    VP_E = VP;
-                    DTR_E = DTR;
-                    WN_E = WN;
-                    DAVTMP_E = DAVTMP;
-                    RAIN_E = RAIN;
-                end
+                l = t;
                 [TSUM(i+1),ROOTD(i+1),WA(i+1),WC(i+1),WCCR(i+1),TEXPLO(i+1),TEVAP(i+1),TTRAN(i+1),TRUNOF(i+1),TIRRIG(i+1),TDRAIN(i+1),TRAIN(i+1),DVS(i+1),NNI(i+1),SLA(i+1),LAI(i+1),...
                     NDEMTO(i+1),TNSOIL(i+1),NUPTT(i+1),ANLV(i+1),ANST(i+1),ANRT(i+1),ANSO(i+1),NLOSSL(i+1),NLOSSR(i+1),WLVG(i+1),WLVD(i+1),WST(i+1),WSO(i+1),WRT(i+1),TAGBM(i+1),...
                     NTAC(i+1),LUECAL(i+1),CUMPAR(i+1), GTSUM(i+1),WDRT(i+1),DSLR(j),DVS1(j),DVS2(j)]...
                     = LINTUL3_onestage(DOY(l),LAI(i),TSUM(i),DTEFF_E(l),WC(i),ROOTD(i),RAIN_E(l),DAVTMP_E(l),VP_E(l),DTR_E(l),WN_E(l),TEXPLO(i),WA(i),TEVAP(i),TTRAN(i),TRUNOF(i),TIRRIG(i),TDRAIN(i),TRAIN(i),WLVG(i),WST(i)...
-                    ,ANLV(i),ANST(i),ANRT(i),ANSO(i),WRT(i),WSO(i),TNSOIL(i),NUPTT(i),NLOSSL(i),NLOSSR(i),WLVD(i),WDRT(i),GTSUM(i),CUMPAR(i),DSLR(j),DVS1(j),DVS2(j),U(1,k),0,U(2,k),0);    
+                    ,ANLV(i),ANST(i),ANRT(i),ANSO(i),WRT(i),WSO(i),TNSOIL(i),NUPTT(i),NLOSSL(i),NLOSSR(i),WLVD(i),WDRT(i),GTSUM(i),CUMPAR(i),DSLR(j),DVS1(j),DVS2(j),U(1,k),0,U(2,k),0);
                 i = i+1; l = l+1;
                 % prediction of future days
                 while l < length(DOY)-1 && TSUM(i) < TTSUM && DVS(i) < 2.01
-                    % State update                    
+                    % State update
                     [TSUM(i+1),ROOTD(i+1),WA(i+1),WC(i+1),WCCR(i+1),TEXPLO(i+1),TEVAP(i+1),TTRAN(i+1),TRUNOF(i+1),TIRRIG(i+1),TDRAIN(i+1),TRAIN(i+1),DVS(i+1),NNI(i+1),SLA(i+1),LAI(i+1),...
                         NDEMTO(i+1),TNSOIL(i+1),NUPTT(i+1),ANLV(i+1),ANST(i+1),ANRT(i+1),ANSO(i+1),NLOSSL(i+1),NLOSSR(i+1),WLVG(i+1),WLVD(i+1),WST(i+1),WSO(i+1),WRT(i+1),TAGBM(i+1),...
                         NTAC(i+1),LUECAL(i+1),CUMPAR(i+1), GTSUM(i+1),WDRT(i+1),DSLR(j),DVS1(j),DVS2(j)]...
@@ -180,33 +182,28 @@ for t = 1:season_max_length-1
                 G(k,j) = WSO(i-1)-WSO_r(j,t);
             end % end bids
         end
-    end  % end clients    
+    end  % end clients
     %% Selection
     j_g = kron(delt, pi)'*G;  %kron(ones(s,1),pi)'*(G.*kron(delt,ones(p,1)))*ones(m,1);
-    j_l = kron(delt,rho)'*L;  %kron(ones(s,1),rho)'*(L.*kron(delt,ones(r,1)))*ones(m,1);   
+    j_l = kron(delt,rho)'*L;  %kron(ones(s,1),rho)'*(L.*kron(delt,ones(r,1)))*ones(m,1);
     j_q = kron(ones(m,1),rho')*sum(Dtau,3)+ kron(ones(m,1),sigma')*sum(Atau,3);% rho'*sum(sum(Dtau,2),3) + sigma'*sum(sum(Atau,2),3);
     J = trace(j_g - j_l - j_q);
     optimize(C, -J ,ops);
     D = round(value(delt));
-    
+    A_temp{t} = round(value(Atau));       
     %% update
     if(expected_weather == 1)
-       dRAIN(t) = std_RAIN(t)*(randn-1); 
-       dDTEFF(t) = std_DTEFF(t)*randn;
-       dWN(t) = std_DTEFF(t)*randn;
-       % some variables are correlated so
-       temprand = randn;
-       dVP(t) = std_VP(t)*temprand;
-       dDAVTMP(t) = std_DAVTMP(t)*temprand;
-       dDTR(t) = std_DTR(t)*temprand;
+        dRAIN(t) = std_RAIN(t)*(randn-1);
+        % some variables are correlated so
+        vec = [std_DTR(t) zeros(1,3); 0 std_VP(t) 0 0; 0 0 std_WN(t) 0; 0 0 0 std_DAVTMP(t)]*double(B_weather_mod{t+STTIME})*randn(4,1);
+        dDTR(t) = vec(1); dVP(t) = vec(2); dWN(t) = vec(3); dDAVTMP(t) = vec(4); 
     else
-       dRAIN(t) = 0;
-       dDTEFF(t) = 0;
-       dWN(t) = 0;
-       dVP(t) = 0;
-       dDAVTMP(t) = 0;
-       dDTR(t) = 0;
-    end    
+        dRAIN(t) = 0;
+        dWN(t)  = 0;
+        dVP(t) = 0;
+        dDAVTMP(t) = 0;
+        dDTR(t) = 0;
+    end
     totU(:,t) = sum(U*D,2);
     for j = 1:m
         if TSUM_r(j,t) < TTSUM && DVS_r(j,t) < 2.01
@@ -214,7 +211,7 @@ for t = 1:season_max_length-1
             [TSUM_r(j,t+1),ROOTD_r(j,t+1),WA_r(j,t+1),WC_r(j,t+1),WCCR_r(j,t+1),TEXPLO_r(j,t+1),TEVAP_r(j,t+1),TTRAN_r(j,t+1),TRUNOF_r(j,t+1),TIRRIG_r(j,t+1),TDRAIN_r(j,t+1),TRAIN_r(j,t+1),DVS_r(j,t+1),NNI_r(j,t+1),SLA_r(j,t+1)...
                 ,LAI_r(j,t+1),NDEMTO_r(j,t+1),TNSOIL_r(j,t+1),NUPTT_r(j,t+1),ANLV_r(j,t+1),ANST_r(j,t+1),ANRT_r(j,t+1),ANSO_r(j,t+1),NLOSSL_r(j,t+1),NLOSSR_r(j,t+1),WLVG_r(j,t+1),WLVD_r(j,t+1),WST_r(j,t+1),WSO_r(j,t+1)...
                 ,WRT_r(j,t+1),TAGBM_r(j,t+1),NTAC_r(j,t+1),LUECAL_r(j,t+1),CUMPAR_r(j,t+1), GTSUM_r(j,t+1),WDRT_r(j,t+1),DSLR_r(j),DVS1_r(j),DVS2_r(j)]...
-                = LINTUL3_onestage(DOY(t),LAI_r(j,t),TSUM_r(j,t),max(0,DTEFF(t)+dDTEFF(t)),WC_r(j,t),ROOTD_r(j,t),max(0,dRAIN(t)+RAIN(t)),DAVTMP(t)+dDAVTMP(t),max(0,VP(t)+dVP(t)),max(0,DTR(t)+dDTR(t)),max(0,WN(t)+dWN(t)),TEXPLO_r(j,t),WA_r(j,t),TEVAP_r(j,t),TTRAN_r(j,t),TRUNOF_r(j,t)...
+                = LINTUL3_onestage(DOY(t),LAI_r(j,t),TSUM_r(j,t),DAVTMP(t)+dDAVTMP(t)-TBASE,WC_r(j,t),ROOTD_r(j,t),max(0,dRAIN(t)+RAIN(t)),DAVTMP(t)+dDAVTMP(t),max(0,VP(t)+dVP(t)),max(0,DTR(t)+dDTR(t)),max(0,WN(t)+dWN(t)),TEXPLO_r(j,t),WA_r(j,t),TEVAP_r(j,t),TTRAN_r(j,t),TRUNOF_r(j,t)...
                 ,TIRRIG_r(j,t),TDRAIN_r(j,t),TRAIN_r(j,t),WLVG_r(j,t),WST_r(j,t),ANLV_r(j,t),ANST_r(j,t),ANRT_r(j,t),ANSO_r(j,t),WRT_r(j,t),WSO_r(j,t),TNSOIL_r(j,t),NUPTT_r(j,t),NLOSSL_r(j,t),NLOSSR_r(j,t)...
                 ,WLVD_r(j,t),WDRT_r(j,t),GTSUM_r(j,t),CUMPAR_r(j,t),DSLR_r(j),DVS1_r(j),DVS2_r(j),U_irrig(j,t),0,U_fert(j,t),0);
         else
@@ -278,17 +275,17 @@ ROOTD   = ROOTD_r(:,1:t);
 WA      = WA_r(:,1:t);
 WC      = WC_r(:,1:t);
 WSOTHA  = WSO/100;
-prof = pi*sum(WSO(:,end)) - sum(rho.*sum(totU))
+prof = pi*sum(WSO(:,end)) - sum(rho.*sum(totU,2))
 
 %% save results
-Str = strcat('results/DHMARA_m', num2str(m),'_p', num2str(p),'_q',num2str(q),'_r',num2str(r),'_n',num2str(n));
+Str = strcat('results/DHMARA_mixedbidreport_m', num2str(m),'_p', num2str(p),'_q',num2str(q),'_r',num2str(r),'_n',num2str(n));
 CheckStr = strcat(Str,'.mat');
 if(exist(CheckStr,'file') == 2)
     prompt = 'file already exists, save anyway y/n?';
     x = input(prompt,'s');
     if(x == 'y')
-         disp('saved')
-         save(Str)        
+        disp('saved')
+        save(Str)
     end
 else
     save(Str)
@@ -296,27 +293,67 @@ end
 %% plot
 figure(1)
 subplot(413)
-plotyear(DOY(1:length(U_fert)),sum(U_fert));
-ylabel(['$\Sigma_{\j \in M} \quad fertilization$'],'interpreter','latex')
+plotyear(DOY(1:length(U_fert)),sum(U_fert),1);
+ylabel('fertilization')
 subplot(414)
-plotyear(DOY(1:length(U_irrig)),sum(U_irrig));
+plotyear(DOY(1:length(U_irrig)),sum(U_irrig),1);
 xlabel('Day of year')
-ylabel(['$\Sigma_{\j \in M} \quad irrigation$'],'interpreter','latex')
+ylabel('irrigation')
 subplot(4,1,[1 2])
 title_str = strcat("Number of agents = ", num2str(n),", number of client = ", num2str(m));
 plotyear(DOY,WSOTHA,LAI);
 title(title_str)
 grid on
-% for gui dont save whole workspace
-save('results/gui7.mat','DOY', 'DTR', 'WN','DAVTMP','DTEFF','RAIN','U_irrig','U_fert','TSUM_r','ROOTD_r','WA_r','WC_r','WCCR_r','TEXPLO_r', 'TEVAP_r','TTRAN_r','TRUNOF_r','TIRRIG_r'...
-    ,'TDRAIN_r','TRAIN_r','DVS_r', 'NNI_r','SLA_r','LAI_r','NDEMTO_r','TNSOIL_r','NUPTT_r','ANLV_r','ANST_r','ANRT_r','ANSO_r','NLOSSL_r','NLOSSR_r','WLVG_r','WST_r','WSO_r','WRT_r','TAGBM_r', ... 
-    'NTAC_r','LUECAL_r','CUMPAR_r','GTSUM_r','WDRT_r','Cmax','q','p')
-%PdfStr = strcat(Str,'.pdf')'
-%set(gcf,'PaperOrientation','Landscape','papertype','a5')
-%print(PdfStr,'-dpdf','-fillpage')
 
+%% save for gui
+count = 1;
+while(true)
+    GuiStr = ['results/gui' num2str(count) '.mat'];
+    if(exist(GuiStr,'file') == 2)
+        % dont save
+        count = count+1;
+    else
+        save(GuiStr,'DOY', 'DTR', 'WN','DAVTMP','DTEFF','RAIN','U_irrig','U_fert','TSUM_r','ROOTD_r','WA_r','WC_r','WCCR_r','TEXPLO_r', 'TEVAP_r','TTRAN_r','TRUNOF_r','TIRRIG_r'...
+            ,'TDRAIN_r','TRAIN_r','DVS_r', 'NNI_r','SLA_r','LAI_r','NDEMTO_r','TNSOIL_r','NUPTT_r','ANLV_r','ANST_r','ANRT_r','ANSO_r','NLOSSL_r','NLOSSR_r','WLVG_r','WST_r','WSO_r','WRT_r','TAGBM_r', ...
+            'NTAC_r','LUECAL_r','CUMPAR_r','GTSUM_r','WDRT_r','Cmax','q','p');
+        break;
+    end
+end
+%% expected plots
+figure
+plot(1:length(dDTR),DTR(1:length(dDTR)))
+xlabel('day [t]')
+ylabel('DTR')
+hold on
+plot(1:length(dDTR),max(0,DTR(1:length(dDTR))+dDTR'))
+legend('real weather','expected weather')
 
+figure
+plot(1:length(dVP),VP(1:length(dDTR)))
 
+xlabel('day [t]')
+ylabel('VP')
+hold on
+plot(1:length(dVP),max(0,VP(1:length(dVP))+dVP'))
+legend('real weather','expected weather')
+
+figure
+plot(1:length(dDAVTMP),DAVTMP(1:length(dDAVTMP)))
+
+xlabel('day [t]')
+ylabel('DAVTMP')
+hold on
+plot(1:length(dDAVTMP),DAVTMP(1:length(dDAVTMP))+dDAVTMP')
+legend('real weather','expected weather')
+
+figure
+plot(1:length(dWN),WN(1:length(dWN)))
+hold on
+plot(1:length(dWN),max(0,WN(1:length(dWN))+dWN'))
+legend('real weather','expected weather')
+ylabel('WN')
+
+xlabel('day [t]')
 
 
 
