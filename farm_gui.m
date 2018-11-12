@@ -47,7 +47,7 @@ agenttext = uicontrol('Style','text','String','-','Position',[figend+110, figtop
 ha = axes('Units','pixels','Position',[80,100,550,450],'box','off','xtick',[],'ytick',[],'ztick',[],'xcolor',[1 1 1],'ycolor',[1 1 1]);
 ha_leg = axes('Units','pixels','Position',[figend,100,60,110],'box','off','xtick',[],'ytick',[],'ztick',[],'xcolor',[1 1 1],'ycolor',[1 1 1]);
 
-staticlegStr = ["Wet"', "Optimal", "Growth", "No growth"]; staticlegStr = pad(staticlegStr);
+staticlegStr = ["Wet"', "Optimal growth", "Normal growth", "No growth"]; staticlegStr = pad(staticlegStr);
 staticleg1 = uicontrol('Style','text','String',strcat(staticlegStr(1)),'Position',[figend+70, 179, buttonwidth, 25],'Fontsize',10,  'HorizontalAlignment', 'left');
 staticleg2 = uicontrol('Style','text','String',strcat(staticlegStr(2)),'Position',[figend+70, 152, buttonwidth, 25],'Fontsize',10,'HorizontalAlignment', 'left');
 staticleg3 = uicontrol('Style','text','String',strcat(staticlegStr(3)),'Position',[figend+70, 124, buttonwidth, 25],'Fontsize',10,'HorizontalAlignment', 'left');
