@@ -3,18 +3,18 @@ function farm_gui_v2
 % be loaded.
 %
 % load button: load another dataset from the folder /results, example:
-% (gui1.mat). 
+% (gui1.mat).
 %
-% save button: saves plot to the file in /figures map as a .fig file 
+% save button: saves plot to the file in /figures map as a .fig file
 % current timestamp and variable name is included in savename.
 %
-% play button: 
+% play button:
 % simulates the controller decision with a delay of 0.5 [s].
 %
 % slider button: can be controlled to select day when play is not active
 %
 % dropdown menu fields: select fieldnumber for plot
-% 
+%
 % dropdown menu variable: select variable for plot
 
 %% create figure, buttons and load simulated results
@@ -23,8 +23,8 @@ data = load('results/gui.mat');
 names = {'DTR', 'WN','DAVTMP','DTEFF','RAIN','U_irrig','U_fert','TSUM_r','ROOTD_r','WA_r','WC_r','WCCR_r','TEXPLO_r', 'TEVAP_r','TTRAN_r','TRUNOF_r','TIRRIG_r'...
     ,'TDRAIN_r','TRAIN_r','DVS_r', 'NNI_r','SLA_r','LAI_r','NDEMTO_r','TNSOIL_r','NUPTT_r','ANLV_r','ANST_r','ANRT_r','ANSO_r','NLOSSL_r','NLOSSR_r','WLVG_r','WST_r','WSO_r','WRT_r','TAGBM_r', ...
     'NTAC_r','LUECAL_r','CUMPAR_r','GTSUM_r','WDRT_r'};
-labels = {'MJ/m^2', 'm/s','degree \circ','degree \circ','mm','mm','gN/m^2','Cd','m', ...
-    'mm', '-','-','mm','mm','mm','mm','mm','mm','mm','-','-','m^2/g','-', 'gN/m^2','gN/m^2','gN/m^2', 'g/m^2','g/m^2','g/m^2','g/m^2','gN/m^2','gN/m^2','g/m^2','g/m^2','g/m^2'...
+labels = {'MJ/m^2', 'm/s','degree \circ','degree \circ','mm','mm','g/m^2','Cd','m', ...
+    'mm', '-','-','mm','mm','mm','mm','mm','mm','mm','-','-','m^2/g','-', 'g/m^2','g/m^2','g/m^2', 'g/m^2','g/m^2','g/m^2','g/m^2','g/m^2','g/m^2','g/m^2','g/m^2','g/m^2'...
     ,'g/m^2','g/m^2','g/m^2','MJ/m^2','g/m^2','g/m^2','g/m^2'};
 % initiasition of some variables
 farmlength = 10;
@@ -115,6 +115,7 @@ while(true)
             case 0 % init
                 % draw_legend(figend,buttonwidth,ha_leg)
                 [init_c_agent,radius,rect_set,center,~,circles] = init_after_data_loaded; %initiase uifigire and variables
+                cur_agent_pos = init_c_agent;                
             case 1 % main loop
                 if(get(hplay,'Value')) % start incrementing day if play button is active
                     if (k >= end_date)
@@ -139,7 +140,7 @@ while(true)
                 data_changed = false; % set data changed false, changed in buttonpresses to true
                 update_field_color(rect_set);% redraw initial field at current day
                 [indecis,resources,fert_agent,irrig_agent] = assign_agent(data.Cmax);
-                [circles,~] = move_agent(circles,indecis,fert_agent,irrig_agent,init_c_agent,radius);
+                [circles] = move_agent(circles,indecis,fert_agent,irrig_agent,init_c_agent,radius);
                 res = data.Cmax-resources; % if no refil required substract from previous in subtime
                 set_Day_Weather(data); % always plot dayweather data
                 pause(0.5); % pause the gui for some time, it will be laggy when no pause is used
@@ -219,7 +220,7 @@ end
         clearvars data fieldnames;
         data = load(fullFileName);
         k = 1;
-        SwitchCase = 0;
+        SwitchCase = 0;        
     end
 %% textbox functions
     function set_Day_Weather(data)
@@ -306,12 +307,13 @@ function update_selected
         end
         circleobj = viscircles(center,radius*ones(n,1));
     end
-    function [circleobjout,cur_agent_pos] = move_agent(circleobjin,indexjes,fert_agent,irrig_agent,init_c_agent,radius)
+    function [circleobjout] = move_agent(circleobjin,indexjes,fert_agent,irrig_agent,init_c_agent,radius)
         agents = zeros(3,2);
         for i = 1:n
-            if(indexjes(i) == 0)
+            if(indexjes(i) == 0 || indexjes(i) > m)
+                % agents(i,:) = init_c_agent(i,:);
                 agents(i,:) = init_c_agent(i,:);
-            else
+            else               
                 agents(i,:) = center(indexjes(i),:);
             end
         end
@@ -321,34 +323,44 @@ function update_selected
         cur_agent_pos = agents;
     end
     function [center_index,actual_res,fert_agent,irrig_agent] = assign_agent(Cmax)
-        fert_agent = find(Cmax(2,:)>0); % number of fertilizer agents
-        irrig_agent = find(Cmax(1,:)>0); % number of irrigation agents
-        n_fert = find(data.U_fert(:,k)>0); % indices of field being fertizlied this day
-        n_irrig = find(data.U_irrig(:,k)>0); % indices of fields being iriigated this day
-        if isempty(n_fert)
-            n_fert = zeros(1,q_sim*length(fert_agent));
-        else
-            nf = q_sim*length(fert_agent)-length(n_fert);
-            n_fert = [n_fert; zeros(nf,1)];
-        end
-        if isempty(n_irrig)
-            n_irrig = zeros(q_sim*length(irrig_agent),1);
-        else
-            nq = q_sim*length(irrig_agent)-length(n_irrig);
-            n_irrig = [n_irrig; zeros(nq,1)];
-        end
-        center_index(fert_agent) = n_fert((q-1)*length(fert_agent)+1:q*length(fert_agent));
-        center_index(irrig_agent) = n_irrig((q-1)*length(irrig_agent)+1:q*length(irrig_agent));
-        actual_res = zeros(size(Cmax));
-        for i = 1:n
-            if(center_index(i) ~= 0)
-                if(i<=length(irrig_agent))
-                    actual_res(1,i) = data.U_irrig(center_index(i),k);
-                else
-                    actual_res(2,i) = data.U_fert(center_index(i),k);
+        if(isfield(data,'A') == 0) % change this since it does not work for old versions
+            fert_agent = find(Cmax(2,:)>0); % number of fertilizer agents
+            irrig_agent = find(Cmax(1,:)>0); % number of irrigation agents
+            n_fert = find(data.U_fert(:,k)>0); % indices of field being fertizlied this day
+            n_irrig = find(data.U_irrig(:,k)>0); % indices of fields being iriigated this day
+            if isempty(n_fert)
+                n_fert = zeros(1,q_sim*length(fert_agent));
+            else
+                nf = q_sim*length(fert_agent)-length(n_fert);
+                n_fert = [n_fert; zeros(nf,1)];
+            end
+            if isempty(n_irrig)
+                n_irrig = zeros(q_sim*length(irrig_agent),1);
+            else
+                nq = q_sim*length(irrig_agent)-length(n_irrig);
+                n_irrig = [n_irrig; zeros(nq,1)];
+            end
+            center_index(fert_agent) = n_fert((q-1)*length(fert_agent)+1:q*length(fert_agent));
+            center_index(irrig_agent) = n_irrig((q-1)*length(irrig_agent)+1:q*length(irrig_agent));
+            actual_res = zeros(size(Cmax));
+            for i = 1:n
+                if(center_index(i) ~= 0)
+                    if(i<=length(irrig_agent))
+                        actual_res(1,i) = data.U_irrig(center_index(i),k);
+                    else
+                        actual_res(2,i) = data.U_fert(center_index(i),k);
+                    end
                 end
             end
+        else
+            actual_res = zeros(size(Cmax));
+            fert_agent = find(Cmax(2,:)>0);
+            irrig_agent = find(Cmax(1,:)>0);
+            for i = 1:n
+               center_index(i) = find(data.A{k}(i,:,q)>0);                
+            end
         end
+        
     end
     function update_field_color(rect_set)
         % add these variables to gui.mat create colorbar
@@ -393,7 +405,6 @@ function draw_legend(figend,buttonwidth,ha_leg)
     end
 %}
 %% plot functions
-% dont keep updating legend if variable is unchanged.
     function plotdata(save,ax_in)
         if(save == 0)
             for figcount = 1:length(ax_in)
@@ -423,14 +434,14 @@ function draw_legend(figend,buttonwidth,ha_leg)
                     else
                         plot(Current_x(1:k),Current_y(field(figcount),1:k));
                         title([tempvar, ' for field ' num2str(field(figcount))]);
-                    end                    
+                    end
                 end
                 if(k~=1)
-                        xlim([Current_x(1) Current_x(k)])
+                    xlim([Current_x(1) Current_x(k)])
                 end
                 if(figcount == 2)
                     xlabel('Day of year')
-                else                    
+                else
                     set(ax_in(figcount),'Xticklabel',[]);
                 end
                 ylabel(label{figcount})
@@ -443,7 +454,7 @@ function draw_legend(figend,buttonwidth,ha_leg)
             end
             hFig = figure('visible', 'off');
             [a_temp,b_temp] = size(Current_y);
-            m = min(a_temp,b_temp);                       
+            m = min(a_temp,b_temp);
             tempvar = strrep(varname{save},'_r', '');
             tempvar = strrep(tempvar,'_', '');
             if(m==1)
@@ -462,7 +473,7 @@ function draw_legend(figend,buttonwidth,ha_leg)
                 else
                     plot(Current_x(1:k),Current_y(field(save),1:k));
                     title([tempvar, ' for field ' num2str(field(save))]);
-                end                
+                end
             end
             if(k~=1)
                 xlim([Current_x(1) Current_x(k)])
